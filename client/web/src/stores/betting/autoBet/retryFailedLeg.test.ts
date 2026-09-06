@@ -117,7 +117,7 @@ describe("retryFailedLeg PM settlement defer", () => {
       successLeg,
       failedLeg,
       new PlatformAccount({ accountId: 2, provider: "RAY", playerName: "ray" }),
-      { anyOdds: false, makeProfit: 1.01, noSameBet: false } as never,
+      { anyOdds: false, makeProfit: 1.01, noSameBet: false, makeUp: true } as never,
       10,
     );
 
@@ -144,7 +144,7 @@ describe("retryFailedLeg makeupOddsBand", () => {
   });
 
   it("keeps retrying later rounds when best live odds sit in the band", async () => {
-    const item = makeItem("OB", 2.05);
+    const item = makeItem("OB", 2.00);
     const match = { id: 1, title: "A vs B" } as never;
     const bet = { id: 100, items: [item] } as never;
     const successLeg = new BetOption("RAY" as never, "m1", "b1", "i1", 100, "Home", 2);
@@ -156,7 +156,7 @@ describe("retryFailedLeg makeupOddsBand", () => {
       successLeg,
       failedLeg,
       new PlatformAccount({ accountId: 2, provider: "RAY", playerName: "ray" }),
-      { anyOdds: false, makeProfit: 1.01, noSameBet: false } as never,
+      { anyOdds: false, makeProfit: 1.01, noSameBet: false, makeUp: true } as never,
       10,
     );
 
@@ -177,7 +177,7 @@ describe("retryFailedLeg makeupOddsBand", () => {
 
     const match = { id: 1, title: "A vs B" } as never;
     const bet = { id: 100, items: [makeItem("OB", 250)] } as never;
-    const successLeg = new BetOption("RAY" as never, "m1", "b1", "i1", 100, "Home", 1.015);
+    const successLeg = new BetOption("RAY" as never, "m1", "b1", "i1", 100, "Home", 1);
     const failedLeg = new BetOption("OB" as never, "m2", "b2", "a1", 100, "Away", 4);
 
     const out = await retryFailedLeg(
@@ -186,11 +186,33 @@ describe("retryFailedLeg makeupOddsBand", () => {
       successLeg,
       failedLeg,
       new PlatformAccount({ accountId: 2, provider: "RAY", playerName: "ray" }),
-      { anyOdds: false, makeProfit: 1.01, noSameBet: false } as never,
+      { anyOdds: false, makeProfit: 1.01, noSameBet: false, makeUp: true } as never,
       10,
     );
 
     expect(out?.result.success).toBe(true);
     expect(betting).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not use the band on immediate retry when makeUp is off", async () => {
+    const item = makeItem("OB", 2.00);
+    const match = { id: 1, title: "A vs B" } as never;
+    const bet = { id: 100, items: [item] } as never;
+    const successLeg = new BetOption("RAY" as never, "m1", "b1", "i1", 100, "Home", 2);
+    const failedLeg = new BetOption("OB" as never, "m2", "b2", "a1", 100, "Away", 2);
+
+    const out = await retryFailedLeg(
+      match,
+      bet,
+      successLeg,
+      failedLeg,
+      new PlatformAccount({ accountId: 2, provider: "RAY", playerName: "ray" }),
+      { anyOdds: false, makeProfit: 1.01, noSameBet: false, makeUp: false } as never,
+      10,
+    );
+
+    expect(out).toBeNull();
+    expect(item.updateOdds).toHaveBeenCalledTimes(1);
+    expect(betting).not.toHaveBeenCalled();
   });
 });

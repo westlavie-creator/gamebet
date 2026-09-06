@@ -13,6 +13,7 @@ import { formatArbProgressTelegramBody } from "@/extensions/notify/formatArbProg
 import { classifyLinkId, formatDate, formatDateKey, formatLinkId, linkIdSourceLabel, percent, toFixed } from "@changmen/client-core/shared/format";
 import { wait } from "@changmen/client-core/shared/wait";
 import { useUserStore } from "@/stores/userStore";
+import { makeupDisplayOdds } from "@/extensions/arbBet/makeupOddsBand";
 import { NOTIFY_TYPES } from "@/types/notifyTypes";
 
 /**
@@ -397,7 +398,7 @@ export const useMessageStore = defineStore("message", {
         `${matchTitle} / ${betName} / ${option.target}`,
         "<blockquote>",
         `原订单时间：${formatDate(order.createAt)}`,
-        `原补单金额：${order.getBetMoney(order.betOdds)}@${order.getOdds(useUserStore().config.makeProfit)}`,
+        `原补单金额：${order.getBetMoney(order.betOdds)}@${makeupDisplayOdds(order, useUserStore().config.makeProfit, useUserStore().extensionPrefs?.makeupOddsBand)}`,
         `补单金额：${option.betMoney}@${option.odds}`,
         `是否拒单：${rejected ? "🔴是" : "否"}`,
         "</blockquote>",

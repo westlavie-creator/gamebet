@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { LoseOrder } from "@/models/loseOrder";
 import {
   filterMakeupOddsBandCandidates,
-  hedgeOddsAtProfit,
   isMakeupOddsBandEnabled,
+  makeupDisplayOdds,
   previewMakeupOddsBand,
   resolveMakeupOddsBandBounds,
 } from "@/extensions/arbBet/makeupOddsBand";
@@ -23,23 +23,34 @@ describe("makeupOddsBand", () => {
     expect(isMakeupOddsBandEnabled(on)).toBe(true);
   });
 
-  it("hedgeOddsAtProfit matches LoseOrder.getOdds", () => {
-    const order = new LoseOrder({ betOdds: 2, isCreateOrder: false });
-    expect(hedgeOddsAtProfit(2, 1.02)).toBe(order.getOdds(1.02));
-    expect(hedgeOddsAtProfit(2, 0.96)).toBe(order.getOdds(0.96));
-    expect(hedgeOddsAtProfit(2, 1)).toBe(order.getOdds(1));
+  it("filled=2 default band is 打平2 × 0.96/1.02", () => {
+    const bounds = previewMakeupOddsBand(2, on);
+    expect(bounds?.breakEvenOdds).toBe(2);
+    expect(bounds?.lowerOdds).toBeCloseTo(1.92, 3);
+    expect(bounds?.upperOdds).toBeCloseTo(2.04, 3);
   });
 
-  it("filled=2 default band is ~1.85–2.08", () => {
-    const bounds = previewMakeupOddsBand(2, on);
-    expect(bounds?.lowerOdds).toBeCloseTo(1.846, 2);
-    expect(bounds?.upperOdds).toBeCloseTo(2.082, 2);
+  it("uses break-even of the filled leg, not the filled odds themselves", () => {
+    const bounds = previewMakeupOddsBand(1.8, on);
+    expect(bounds?.breakEvenOdds).toBeCloseTo(2.25, 2);
+    expect(bounds?.lowerOdds).toBeCloseTo(2.25 * 0.96, 2);
+    expect(bounds?.upperOdds).toBeCloseTo(2.25 * 1.02, 2);
+  });
+
+  it("skips 2.20 when filled is 1.8 (in BE band, would be a false profit if using filled×k)", () => {
+    const out = filterMakeupOddsBandCandidates([item(2.20)], i => i.odds, 1.8, on);
+    expect(out).toEqual([]);
+  });
+
+  it("places 2.00 as a loss when filled is 1.8 (below BE×0.96)", () => {
+    const out = filterMakeupOddsBandCandidates([item(2.00)], i => i.odds, 1.8, on);
+    expect(out?.map(i => i.odds)).toEqual([2]);
   });
 
   it("lower 0 disables the loss side", () => {
     const bounds = resolveMakeupOddsBandBounds(2, { enabled: true, upper: 1.02, lower: 0 });
     expect(bounds?.lowerOdds).toBeNull();
-    expect(bounds?.upperOdds).toBeGreaterThan(2);
+    expect(bounds?.upperOdds).toBeCloseTo(2.04, 3);
   });
 
   it("skips the whole tick when best odds sit in the band", () => {
@@ -79,13 +90,39 @@ describe("makeupOddsBand", () => {
     expect(out?.map(i => i.type)).toEqual(["OB", "RAY"]);
   });
 
-  it("returns null when hedge formula cannot be solved so caller can fall back", () => {
+  it("treats a cleared lower as default 0.96, not as disable-loss", () => {
     const out = filterMakeupOddsBandCandidates(
       [item(2.00)],
       i => i.odds,
-      1.01,
+      2,
+      { enabled: true, upper: 1.02, lower: null as unknown as number },
+    );
+    expect(out).toEqual([]);
+  });
+
+  it("returns null when break-even cannot be solved so caller can fall back", () => {
+    const out = filterMakeupOddsBandCandidates(
+      [item(2.00)],
+      i => i.odds,
+      1,
       { enabled: true, upper: 1.02, lower: 0.96 },
     );
     expect(out).toBeNull();
+  });
+
+  it("display odds match getOdds(makeProfit) when the band is off", () => {
+    const order = new LoseOrder({ betOdds: 2, isCreateOrder: false });
+    expect(makeupDisplayOdds(order, 1.01, off)).toBe(order.getOdds(1.01));
+    expect(makeupDisplayOdds(order, 1.01, undefined)).toBe(order.getOdds(1.01));
+  });
+
+  it("display odds use break-even when the band is on", () => {
+    const order = new LoseOrder({ betOdds: 2, isCreateOrder: false });
+    expect(makeupDisplayOdds(order, 1.01, on)).toBe(2);
+  });
+
+  it("display odds stay on typed odds for manual isCreateOrder", () => {
+    const order = new LoseOrder({ betOdds: 1.88, isCreateOrder: true });
+    expect(makeupDisplayOdds(order, 1.01, on)).toBe(1.88);
   });
 });

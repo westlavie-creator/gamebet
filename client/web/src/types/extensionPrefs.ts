@@ -110,14 +110,15 @@ export function createDefaultPfArbPriceBufferPrefs(): PfArbPriceBufferPrefs {
 }
 
 /**
- * [changmen 扩展] 补单消费赔率上下沿（利润率，与 makeProfit 同口径）。
+ * [changmen 扩展] 补单消费赔率上下沿：打平赔率 × 系数。
  * 默认关 = 现网 makeProfit 地板；开则替代补单消费 / anyOdds 重试门槛。
+ * 例：已成 2 → 打平 2，默认不补 [2×0.96, 2×1.02]。
  */
 export interface MakeupOddsBandPrefs {
   enabled: boolean;
-  /** 锁赚上沿，默认 1.02，须 > 1 */
+  /** 打平赔率上浮系数，默认 1.02，须 > 1 */
   upper: number;
-  /** 认亏下沿，默认 0.96；0 = 关闭下沿（只留上沿） */
+  /** 打平赔率下浮系数，默认 0.96；0 = 关闭下沿（只留上沿） */
   lower: number;
 }
 
@@ -214,7 +215,7 @@ export interface ExtensionPrefs extends Record<string, unknown> {
   /** PF 套利：有 fo 时读打折档（展示/扫描/对冲/限价）；无 fo 不打折；默认关 = 裸限价 */
   pfArbPriceBuffer: PfArbPriceBufferPrefs;
   /**
-   * 补单赔率上下沿。默认关；UI 在参数配置「补单配置」，存储仍走 Extensions。
+   * 补单打平价×系数上下沿。默认关；UI 在参数配置「补单配置」，存储仍走 Extensions。
    */
   makeupOddsBand: MakeupOddsBandPrefs;
   /**

@@ -8,10 +8,16 @@ const a8Tip = vi.hoisted(() => vi.fn());
 const wait = vi.hoisted(() => vi.fn(async () => {}));
 const createOrder = vi.hoisted(() => vi.fn());
 const has = vi.hoisted(() => vi.fn((_id?: number) => false));
+const extensionPrefs = vi.hoisted(() => ({
+  makeupOddsBand: { enabled: false, upper: 1.02, lower: 0.96 },
+}));
 
 vi.mock("@/api/report", () => ({ getDefaultOdds }));
 vi.mock("@/shared/a8Notify", () => ({ a8Tip }));
 vi.mock("@changmen/client-core/shared/wait", () => ({ wait }));
+vi.mock("@/stores/userStore", () => ({
+  useUserStore: () => ({ extensionPrefs }),
+}));
 
 import { allowMakeUpForLeg, enqueueMakeUpOrder } from "@/stores/betting/autoBet/makeUp";
 
@@ -33,6 +39,7 @@ describe("allowMakeUpForLeg (A8 B)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     getDefaultOdds.mockResolvedValue(0);
+    extensionPrefs.makeupOddsBand = { enabled: false, upper: 1.02, lower: 0.96 };
   });
 
   it("denies when makeUp_odds <= failedLegOdds and tips", async () => {
@@ -73,6 +80,22 @@ describe("allowMakeUpForLeg (A8 B)", () => {
       3000,
     );
   });
+
+  it("skips 初赔/当前赔率 caps when makeupOddsBand is on", async () => {
+    extensionPrefs.makeupOddsBand = { enabled: true, upper: 1.02, lower: 0.96 };
+    const { match, bet } = makeMatchBet();
+    getDefaultOdds.mockResolvedValueOnce(2.5);
+    const config = {
+      ...createDefaultUserConfig(),
+      makeUp: true,
+      makeUp_odds: 2,
+      makeUp_defaultOdds: 2,
+    };
+    const ok = await allowMakeUpForLeg(match, bet, "Home", 2.3, config, setMessage);
+    expect(ok).toBe(true);
+    expect(getDefaultOdds).not.toHaveBeenCalled();
+    expect(a8Tip).not.toHaveBeenCalled();
+  });
 });
 
 describe("enqueueMakeUpOrder (A8 B before createOrder)", () => {
@@ -87,6 +110,7 @@ describe("enqueueMakeUpOrder (A8 B before createOrder)", () => {
     vi.clearAllMocks();
     has.mockReturnValue(false);
     getDefaultOdds.mockResolvedValue(0);
+    extensionPrefs.makeupOddsBand = { enabled: false, upper: 1.02, lower: 0.96 };
   });
 
   it("does not enqueue when failedLegOdds exceeds makeUp_odds", async () => {

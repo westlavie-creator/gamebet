@@ -5,10 +5,13 @@ import { getDefaultOdds } from "@/api/report";
 import { LoseOrder } from "@/models/loseOrder";
 import { a8Tip } from "@/shared/a8Notify";
 import { wait } from "@changmen/client-core/shared/wait";
+import { isMakeupOddsBandEnabled } from "@/extensions/arbBet/makeupOddsBand";
+import { useUserStore } from "@/stores/userStore";
 
 /**
  * [A8 可证实] 对齐 bundle `B()`：入队前初赔 / 败腿赔率天花板。
  * jb 消费段不调用（index0706 全文件仅 2 处 `await B(`，均在 createOrder 前）。
+ * 上下沿开启时 UI 已藏掉这两项，入队也不再套这道天花板，改由消费带过滤。
  */
 export async function allowMakeUpForLeg(
   match: ViewMatch,
@@ -21,6 +24,8 @@ export async function allowMakeUpForLeg(
   opts: { notify?: boolean } = {},
 ): Promise<boolean> {
   const notify = opts.notify !== false;
+  if (isMakeupOddsBandEnabled(useUserStore().extensionPrefs?.makeupOddsBand))
+    return true;
   let denyReason: string | undefined;
   if (config.makeUp_defaultOdds !== 0) {
     const def = await getDefaultOdds({

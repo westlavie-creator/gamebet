@@ -257,7 +257,7 @@ function setWaitTime(platform: string, v: string | number) {
           <template v-if="form.makeUp && makeupOddsBand">
             <el-form-item
               label="补单上下沿:"
-              title="关：仍用补单利润。开：替代补单消费与任意赔率重试门槛，入队初赔/当前赔率不变。下沿 0 表示亏损不补。"
+              title="关：现网补单利润与入队初赔/当前赔率。开：按打平赔率×系数，替代消费门槛与拒单即时重试。"
             >
               <el-switch
                 v-model="makeupOddsBand.enabled"
@@ -268,7 +268,10 @@ function setWaitTime(platform: string, v: string | number) {
               />
             </el-form-item>
             <template v-if="makeupOddsBand.enabled">
-              <el-form-item label="上沿:">
+              <el-form-item
+                label="打平上浮:"
+                title="打平赔率乘该系数。已成 2 → 打平 2，1.02 即高于 2.04 才补。"
+              >
                 <el-input-number
                   v-model="makeupOddsBand.upper"
                   :min="1.001"
@@ -280,8 +283,8 @@ function setWaitTime(platform: string, v: string | number) {
                 />
               </el-form-item>
               <el-form-item
-                label="下沿:"
-                title="0=亏损不补；0.5–0.99=认亏比例。清空按 0.96。"
+                label="打平下浮:"
+                title="打平赔率乘该系数。0=亏损不补；0.96 即低于 1.92 才补。清空按 0.96。"
               >
                 <el-input-number
                   v-model="makeupOddsBand.lower"
@@ -294,7 +297,7 @@ function setWaitTime(platform: string, v: string | number) {
                 />
               </el-form-item>
               <p v-if="bandPreview" class="config-section__hint">
-                已成 2 时：
+                已成 2 → 打平 {{ bandPreview.breakEvenOdds }}，
                 <template v-if="bandPreview.lowerOdds != null">
                   低于 {{ bandPreview.lowerOdds }} 或
                 </template>
@@ -302,7 +305,7 @@ function setWaitTime(platform: string, v: string | number) {
               </p>
             </template>
           </template>
-          <template v-if="form.makeUp">
+          <template v-if="form.makeUp && makeupOddsBand?.enabled !== true">
             <el-form-item label="初始赔率:" title="初赔大于此设定赔率不进行补单">
               <el-input
                 v-model="form.makeUp_defaultOdds"
@@ -377,7 +380,7 @@ function setWaitTime(platform: string, v: string | number) {
               </template>
             </div>
             <p v-if="form.anyOdds && makeupOddsBand?.enabled" class="config-section__hint">
-              上下沿开启时，拒单即时重试也走同一对比例。
+              上下沿开启时，拒单即时重试也按打平价×同一对系数。
             </p>
           </el-form-item>
         </div>

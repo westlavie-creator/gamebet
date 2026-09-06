@@ -34,6 +34,7 @@ const mergedOrderEntries = computed(() => {
     loseOrders.value,
     config.value.makeProfit,
     cancelledOrders.value,
+    userStore.extensionPrefs.makeupOddsBand,
   );
   return orderLinkMapEntries(merged);
 });

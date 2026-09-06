@@ -37,7 +37,8 @@ export async function retryFailedLeg(
   const accountStore = useAccountStore();
   const matchStore = useMatchStore();
   const bandPrefs = useUserStore().extensionPrefs?.makeupOddsBand;
-  const useBand = isMakeupOddsBandEnabled(bandPrefs);
+  // 关上下沿、或关掉「是否补单」：即时重试仍走 A8 makeProfit / anyOddsProfit
+  const useBand = isMakeupOddsBandEnabled(bandPrefs) && config.makeUp !== false;
   const profitThreshold = config.anyOdds ? config.anyOddsProfit : config.makeProfit;
   const minOdds = 1 / (1 / profitThreshold - 1 / successLeg.odds);
 

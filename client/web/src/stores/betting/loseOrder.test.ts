@@ -727,7 +727,7 @@ describe("processLoseOrders makeupOddsBand", () => {
   }
 
   it("skips consume when best odds sit in the band", async () => {
-    matchs.push(makeMatch(makeBet([makeItem("OB", 2.05)])));
+    matchs.push(makeMatch(makeBet([makeItem("OB", 2.00)])));
     queueOrder({ betOdds: 2, target: "Home" });
     stubAccount();
 
@@ -739,7 +739,7 @@ describe("processLoseOrders makeupOddsBand", () => {
 
   it("does not fall through to a worse quote while best is in-band", async () => {
     matchs.push(makeMatch(makeBet([
-      makeItem("OB", 2.05),
+      makeItem("OB", 2.00),
       makeItem("RAY", 1.80),
     ])));
     queueOrder({ betOdds: 2, target: "Home" });
@@ -784,7 +784,7 @@ describe("processLoseOrders makeupOddsBand", () => {
 
   it("falls back to makeProfit when the hedge formula cannot be solved", async () => {
     matchs.push(makeMatch(makeBet([makeItem("OB", 250)])));
-    queueOrder({ betOdds: 1.015, target: "Home" });
+    queueOrder({ betOdds: 1, target: "Home" });
     stubAccount();
 
     await processLoseOrders({ setMessage: vi.fn() });

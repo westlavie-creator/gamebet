@@ -13,7 +13,7 @@
  * | 高利润加仓 | 无 | `stakeScaleByProfit`：implied 达阈值时两腿注码同乘；可选忽略账号比例 |
  * | 失败敞口减仓 | 无 | `arbFailAutoSell`：对侧拒单且未补单时自动卖 PM/PF 成交腿 |
  * | 提前锁利 | 无 | `arbEarlyLockSell`：仅双边 PM/PF，同卖净利优于锁定时两边一起卖 |
- * | 补单上下沿 | `makeProfit` 单边地板 | `makeupOddsBand`：默认关；开则替代补单消费/anyOdds 重试门槛 |
+ * | 补单上下沿 | `makeProfit` 单边地板 | `makeupOddsBand`：默认关；开则按打平赔率×系数替代消费/anyOdds 门槛 |
  * | Telegram | 仅成功推单等（见 messageStore） | 同左 + 可选套利进度报告（`extensions/notify`） |
  * | BetRow 红线 / flash | 无 / bundle 内联 | `extensions/arbBet/ui` |
  *
@@ -70,8 +70,8 @@ export {
 
 export {
   filterMakeupOddsBandCandidates,
-  hedgeOddsAtProfit,
   isMakeupOddsBandEnabled,
+  makeupDisplayOdds,
   previewMakeupOddsBand,
   resolveMakeupOddsBandBounds,
 } from "@/extensions/arbBet/makeupOddsBand";

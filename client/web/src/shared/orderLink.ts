@@ -1,9 +1,11 @@
 import type { LoseOrderCancelledRecord, OrderRow } from "@/types/order";
 import type { LoseOrder } from "@/models/loseOrder";
+import type { MakeupOddsBandPrefs } from "@/types/extensionPrefs";
 import { hasOpenPolymarketPosition, resolvePmRemainingShares } from "@changmen/venue-adapter/polymarket";
 import { formatLinkId, isSingleLegLink, orderLinkSortKey, toFixed } from "@changmen/client-core/shared/format";
 import { Currency, getExchange } from "@changmen/shared/currency";
 import { truncateShareUsdtAmount } from "@/shared/pfOrderDisplay";
+import { makeupDisplayOdds } from "@/extensions/arbBet/makeupOddsBand";
 
 /** 与 @changmen/db ARB_LINK_MIN 对齐：SaveOrderBind 的 Date.now() 毫秒时间戳 */
 const ARB_LINK_MIN = 1_000_000_000_000;
@@ -655,8 +657,12 @@ function resolveMakeupPendingPresentation(order: LoseOrder): {
 }
 
 /** [changmen 扩展] 补单队列项 → 订单组内「补单中」占位行（同 Link 合并展示） */
-export function loseOrderToPendingRow(order: LoseOrder, makeProfit: number): OrderRow {
-  const odds = order.getOdds(makeProfit);
+export function loseOrderToPendingRow(
+  order: LoseOrder,
+  makeProfit: number,
+  bandPrefs?: MakeupOddsBandPrefs | null,
+): OrderRow {
+  const odds = makeupDisplayOdds(order, makeProfit, bandPrefs);
   const betMoney = order.getBetMoney(odds);
   const presentation = resolveMakeupPendingPresentation(order);
   return {
@@ -703,6 +709,7 @@ export function mergePendingMakeupIntoOrderGroups(
   loseOrders: Map<number, LoseOrder>,
   makeProfit: number,
   _cancelledMakeup: Map<number, LoseOrderCancelledRecord> = new Map(),
+  bandPrefs?: MakeupOddsBandPrefs | null,
 ): Map<number, OrderRow[]> {
   const allRows: OrderRow[] = [];
   for (const rows of groups.values())
@@ -713,7 +720,7 @@ export function mergePendingMakeupIntoOrderGroups(
     const syntheticId = `makeup-${order.betId}`;
     if (allRows.some(r => String(r.OrderID) === syntheticId))
       continue;
-    allRows.push(loseOrderToPendingRow(order, makeProfit));
+    allRows.push(loseOrderToPendingRow(order, makeProfit, bandPrefs));
   }
   // 手动取消的补单不再并入侧栏（取消即消失，不留 MakeupCancelled 占位）
   // 防御卖单 Link，避免补单合并时把已对齐的卖单按脏 Link 拆组
