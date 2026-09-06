@@ -20,7 +20,9 @@ import { isPendingConfirmVenueProvider } from "@changmen/shared/account_multiply
 import { useMessageStore } from "@/stores/messageStore";
 import { persistPolymarketMatchedBuyOrder } from "@/stores/account/pmOptimisticOrder";
 import { persistPolymarketExecutionReject } from "@/stores/account/pmRejectOrder";
+import { legRejectWaitSec } from "@/stores/betting/autoBet/rejectWait";
 import { markSuccessfulBet } from "@/stores/betting/successMarkers";
+import { useUserStore } from "@/stores/userStore";
 
 export type CheckBettingOpts = ResolveVenueStakeOpts;
 
@@ -169,6 +171,23 @@ export async function placeBet(
     }
     else {
       result = await provider.betting(account, option);
+      // [changmen 扩展] 套利 A8 馆（RAY）POST 无 orderId：立刻并行对单刷侧栏，不挡后续拒单等待
+      if (
+        result.success
+        && !result.pending
+        && opts?.linkId
+        && !isPendingConfirmVenueProvider(account.provider)
+      ) {
+        const linkId = opts.linkId;
+        void import("@/stores/betting/autoBet/appearArbOrderDuringRejectWait")
+          .then(({ appearArbOrderDuringRejectWait }) => appearArbOrderDuringRejectWait({
+            account,
+            option,
+            linkId,
+            rejectWaitSec: legRejectWaitSec(useUserStore().config, account.provider),
+          }))
+          .catch(() => {});
+      }
       // PM matched：官方 POST 成交即真相，立刻落库，勿干等 /data/trades
       if (result.success && !result.pending && account.provider === "Polymarket") {
         try {
