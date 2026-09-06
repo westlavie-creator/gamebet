@@ -6,10 +6,9 @@ import { BetOption } from "@changmen/client-core/models/betOption";
 const getOrders = vi.fn();
 const updateVenueOrders = vi.fn();
 const refreshOrderListAfterBind = vi.fn();
-const wait = vi.fn<(ms: number) => Promise<void>>(async () => {});
 
 vi.mock("@changmen/client-core/shared/wait", () => ({
-  wait: (ms: number) => wait(ms),
+  wait: vi.fn(async () => {}),
 }));
 
 vi.mock("@/runtime/providers", () => ({
@@ -86,7 +85,6 @@ describe("appearArbOrderDuringRejectWait", () => {
     updateVenueOrders.mockReset();
     updateVenueOrders.mockResolvedValue([]);
     refreshOrderListAfterBind.mockReset();
-    wait.mockClear();
   });
 
   it("saves matched RAY order and refreshes sidebar before reject wait ends", async () => {
