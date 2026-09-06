@@ -77,6 +77,49 @@ describe("findMatchingArbVenueOrder", () => {
     );
     expect(hit?.orderId).toBe("ours");
   });
+
+  it("ignores reject / settled rows even when stake and odds match", async () => {
+    const { findMatchingArbVenueOrder } = await import("./appearArbOrderDuringRejectWait");
+    const placedAt = Date.now();
+    const hit = findMatchingArbVenueOrder(
+      [
+        order({ orderId: "rej", createAt: placedAt - 100, betMoney: 100, odds: 1.85, status: "reject" }),
+        order({ orderId: "win", createAt: placedAt - 50, betMoney: 100, odds: 1.85, status: "win" }),
+        order({ orderId: "open", createAt: placedAt - 20, betMoney: 100, odds: 1.85, status: "none" }),
+      ],
+      option(),
+      placedAt,
+    );
+    expect(hit?.orderId).toBe("open");
+  });
+
+  it("does not bind a same-stake order from several seconds before place", async () => {
+    const { findMatchingArbVenueOrder, CREATE_AT_SLACK_MS } = await import("./appearArbOrderDuringRejectWait");
+    const placedAt = Date.now();
+    const hit = findMatchingArbVenueOrder(
+      [
+        order({
+          orderId: "prev",
+          createAt: placedAt - CREATE_AT_SLACK_MS - 1,
+          betMoney: 100,
+          odds: 1.85,
+        }),
+      ],
+      option(),
+      placedAt,
+    );
+    expect(hit).toBeUndefined();
+  });
+
+  it("skips rows without createAt", async () => {
+    const { findMatchingArbVenueOrder } = await import("./appearArbOrderDuringRejectWait");
+    const hit = findMatchingArbVenueOrder(
+      [order({ orderId: "nots", createAt: 0, betMoney: 100, odds: 1.85 })],
+      option(),
+      Date.now(),
+    );
+    expect(hit).toBeUndefined();
+  });
 });
 
 describe("appearArbOrderDuringRejectWait", () => {
