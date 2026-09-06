@@ -9,7 +9,7 @@ const refreshOrderListAfterBind = vi.fn();
 const wait = vi.fn(async () => {});
 
 vi.mock("@changmen/client-core/shared/wait", () => ({
-  wait: (...args: unknown[]) => wait(...args),
+  wait: (ms: number) => wait(ms),
 }));
 
 vi.mock("@/runtime/providers", () => ({
