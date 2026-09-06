@@ -28,6 +28,11 @@ const updateVenueOrders = vi.hoisted(() => vi.fn(async (_acc?: PlatformAccount) 
 const refreshBalance = vi.hoisted(() => vi.fn(async () => undefined));
 const settlePolymarketDelayedOrder = vi.hoisted(() => vi.fn());
 const activeBetRuns = vi.hoisted(() => new Map<number, { legs: { side: "A" | "B"; target: string; status: string }[] }>());
+const extensionPrefs = vi.hoisted(() => ({
+  arbFailAutoSell: { enabled: false },
+  arbEarlyLockSell: { enabled: false },
+  makeupOddsBand: { enabled: false, upper: 1.02, lower: 0.96 },
+}));
 
 vi.mock("@/stores/activeBetRunStore", () => ({
   useActiveBetRunStore: () => ({ runs: activeBetRuns }),
@@ -42,10 +47,7 @@ vi.mock("@/stores/userStore", () => ({
       noSameProvider: false,
       waitTime: { OB: 10, RAY: 10 },
     },
-    extensionPrefs: {
-      arbFailAutoSell: { enabled: false },
-      arbEarlyLockSell: { enabled: false },
-    },
+    extensionPrefs,
   }),
 }));
 
@@ -180,6 +182,7 @@ describe("processLoseOrders (A8 jb parity)", () => {
     loseOrders.clear();
     activeBetRuns.clear();
     matchs.length = 0;
+    extensionPrefs.makeupOddsBand = { enabled: false, upper: 1.02, lower: 0.96 };
     vi.clearAllMocks();
     saveOrderBind.mockResolvedValue(true);
     getAccount.mockReset();
@@ -697,6 +700,96 @@ describe("processLoseOrders (A8 jb parity)", () => {
 
     expect(checkBetting).toHaveBeenCalledTimes(1);
     expect(checkBetting.mock.calls[0][1].betMoney).toBe(72);
+    expect(betting).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("processLoseOrders makeupOddsBand", () => {
+  beforeEach(() => {
+    loseOrders.clear();
+    matchs.length = 0;
+    extensionPrefs.makeupOddsBand = { enabled: true, upper: 1.02, lower: 0.96 };
+    vi.clearAllMocks();
+    getAccount.mockReset();
+    checkBetting.mockReset();
+    betting.mockReset();
+  });
+
+  function stubAccount() {
+    const acc = new PlatformAccount({ accountId: 1, playerName: "ob1", provider: "OB" });
+    getAccount.mockReturnValue(acc);
+    checkBetting.mockImplementation(async (_acc, opt: BetOption) => {
+      opt.data = { ok: true };
+      return opt;
+    });
+    betting.mockResolvedValue({ success: false, provider: "OB" });
+    return acc;
+  }
+
+  it("skips consume when best odds sit in the band", async () => {
+    matchs.push(makeMatch(makeBet([makeItem("OB", 2.05)])));
+    queueOrder({ betOdds: 2, target: "Home" });
+    stubAccount();
+
+    await processLoseOrders({ setMessage: vi.fn() });
+
+    expect(getAccount).not.toHaveBeenCalled();
+    expect(betting).not.toHaveBeenCalled();
+  });
+
+  it("does not fall through to a worse quote while best is in-band", async () => {
+    matchs.push(makeMatch(makeBet([
+      makeItem("OB", 2.05),
+      makeItem("RAY", 1.80),
+    ])));
+    queueOrder({ betOdds: 2, target: "Home" });
+    stubAccount();
+
+    await processLoseOrders({ setMessage: vi.fn() });
+
+    expect(getAccount).not.toHaveBeenCalled();
+  });
+
+  it("places when best odds are above the upper bound", async () => {
+    matchs.push(makeMatch(makeBet([makeItem("OB", 2.10)])));
+    queueOrder({ betOdds: 2, target: "Home" });
+    stubAccount();
+
+    await processLoseOrders({ setMessage: vi.fn() });
+
+    expect(getAccount).toHaveBeenCalled();
+    expect(betting).toHaveBeenCalledTimes(1);
+  });
+
+  it("places at a loss when best odds are below the lower bound", async () => {
+    matchs.push(makeMatch(makeBet([makeItem("OB", 1.70)])));
+    queueOrder({ betOdds: 2, target: "Home" });
+    stubAccount();
+
+    await processLoseOrders({ setMessage: vi.fn() });
+
+    expect(getAccount).toHaveBeenCalled();
+    expect(betting).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not apply the band to manual isCreateOrder", async () => {
+    matchs.push(makeMatch(makeBet([makeItem("OB", 2.00)])));
+    queueOrder({ betOdds: 2, target: "Home", isCreateOrder: true });
+    stubAccount();
+
+    await processLoseOrders({ setMessage: vi.fn() });
+
+    expect(getAccount).toHaveBeenCalled();
+  });
+
+  it("falls back to makeProfit when the hedge formula cannot be solved", async () => {
+    matchs.push(makeMatch(makeBet([makeItem("OB", 250)])));
+    queueOrder({ betOdds: 1.015, target: "Home" });
+    stubAccount();
+
+    await processLoseOrders({ setMessage: vi.fn() });
+
+    expect(getAccount).toHaveBeenCalled();
     expect(betting).toHaveBeenCalledTimes(1);
   });
 });

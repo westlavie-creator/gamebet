@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { UserConfigFormState } from "@/components/user/userConfigFormState";
+import type { MakeupOddsBandPrefs } from "@/types/extensionPrefs";
 import { computed, ref } from "vue";
 import {
   BET_SORTING_KEYS,
@@ -9,6 +10,8 @@ import {
   waitTimePlatformPairs,
 } from "@/components/user/userConfigFormState";
 import PlatformIcon from "@/components/platform/PlatformIcon.vue";
+import { previewMakeupOddsBand } from "@/extensions/arbBet/makeupOddsBand";
+import { normalizeMakeupOddsBand } from "@/types/extensionPrefs";
 import { ALL_PLATFORMS } from "@/types/userConfig";
 
 const props = defineProps<{
@@ -22,6 +25,7 @@ const emit = defineEmits<{
 
 // eslint-disable-next-line prefer-const -- defineModel ref is not reassigned, but Vue compiler requires `let` for v-model
 let form = defineModel<UserConfigFormState>("form", { required: true });
+const makeupOddsBand = defineModel<MakeupOddsBandPrefs | undefined>("makeupOddsBand");
 
 const LABEL_W = USER_CONFIG_LABEL_W;
 const sortingLabels = BET_SORTING_LABELS;
@@ -29,6 +33,13 @@ const sortingKeys = BET_SORTING_KEYS;
 const platformPairs = waitTimePlatformPairs();
 
 const dragIndex = ref(0);
+
+const bandPreview = computed(() => {
+  const prefs = makeupOddsBand.value;
+  if (!prefs?.enabled)
+    return null;
+  return previewMakeupOddsBand(2, normalizeMakeupOddsBand(prefs));
+});
 
 const openDate = computed({
   get() {
@@ -237,9 +248,60 @@ function setWaitTime(platform: string, v: string | number) {
             <el-input
               v-model="form.makeProfit"
               autocomplete="off"
-              :disabled="fieldDisabled(!form.makeUp)"
+              :disabled="fieldDisabled(!form.makeUp || makeupOddsBand?.enabled === true)"
+              :title="makeupOddsBand?.enabled
+                ? '已改由上下沿作为消费门槛'
+                : undefined"
             />
           </el-form-item>
+          <template v-if="form.makeUp && makeupOddsBand">
+            <el-form-item
+              label="补单上下沿:"
+              title="关：仍用补单利润。开：替代补单消费与任意赔率重试门槛，入队初赔/当前赔率不变。下沿 0 表示亏损不补。"
+            >
+              <el-switch
+                v-model="makeupOddsBand.enabled"
+                inline-prompt
+                active-text="开"
+                inactive-text="关"
+                :disabled="fieldDisabled()"
+              />
+            </el-form-item>
+            <template v-if="makeupOddsBand.enabled">
+              <el-form-item label="上沿:">
+                <el-input-number
+                  v-model="makeupOddsBand.upper"
+                  :min="1.001"
+                  :max="1.5"
+                  :step="0.01"
+                  :precision="3"
+                  controls-position="right"
+                  :disabled="fieldDisabled()"
+                />
+              </el-form-item>
+              <el-form-item
+                label="下沿:"
+                title="0=亏损不补；0.5–0.99=认亏比例。清空按 0.96。"
+              >
+                <el-input-number
+                  v-model="makeupOddsBand.lower"
+                  :min="0"
+                  :max="0.999"
+                  :step="0.01"
+                  :precision="3"
+                  controls-position="right"
+                  :disabled="fieldDisabled()"
+                />
+              </el-form-item>
+              <p v-if="bandPreview" class="config-section__hint">
+                已成 2 时：
+                <template v-if="bandPreview.lowerOdds != null">
+                  低于 {{ bandPreview.lowerOdds }} 或
+                </template>
+                高于 {{ bandPreview.upperOdds }} 才补
+              </p>
+            </template>
+          </template>
           <template v-if="form.makeUp">
             <el-form-item label="初始赔率:" title="初赔大于此设定赔率不进行补单">
               <el-input
@@ -310,10 +372,13 @@ function setWaitTime(platform: string, v: string | number) {
                   v-model="form.anyOddsProfit"
                   autocomplete="off"
                   style="width: 80px"
-                  :disabled="fieldDisabled(!form.anyOdds)"
+                  :disabled="fieldDisabled(!form.anyOdds || makeupOddsBand?.enabled === true)"
                 />
               </template>
             </div>
+            <p v-if="form.anyOdds && makeupOddsBand?.enabled" class="config-section__hint">
+              上下沿开启时，拒单即时重试也走同一对比例。
+            </p>
           </el-form-item>
         </div>
       </el-col>
@@ -480,6 +545,10 @@ function setWaitTime(platform: string, v: string | number) {
 
 .config-section :deep(.el-form-item__label) {
   font-size: 12px;
+}
+
+.config-section :deep(.el-input-number) {
+  width: 120px;
 }
 
 .bet-sorting-group {

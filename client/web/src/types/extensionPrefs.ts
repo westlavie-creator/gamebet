@@ -109,6 +109,29 @@ export function createDefaultPfArbPriceBufferPrefs(): PfArbPriceBufferPrefs {
   return { enabled: false, multiplier: 1.01 };
 }
 
+/**
+ * [changmen 扩展] 补单消费赔率上下沿（利润率，与 makeProfit 同口径）。
+ * 默认关 = 现网 makeProfit 地板；开则替代补单消费 / anyOdds 重试门槛。
+ */
+export interface MakeupOddsBandPrefs {
+  enabled: boolean;
+  /** 锁赚上沿，默认 1.02，须 > 1 */
+  upper: number;
+  /** 认亏下沿，默认 0.96；0 = 关闭下沿（只留上沿） */
+  lower: number;
+}
+
+export const DEFAULT_MAKEUP_ODDS_BAND_UPPER = 1.02;
+export const DEFAULT_MAKEUP_ODDS_BAND_LOWER = 0.96;
+
+export function createDefaultMakeupOddsBandPrefs(): MakeupOddsBandPrefs {
+  return {
+    enabled: false,
+    upper: DEFAULT_MAKEUP_ODDS_BAND_UPPER,
+    lower: DEFAULT_MAKEUP_ODDS_BAND_LOWER,
+  };
+}
+
 /** [changmen 扩展] 控制台显示皮肤；不改 DOM 结构，仅换 CSS 令牌 */
 export type UiTheme = "default" | "brutal" | "paper" | "terminal";
 
@@ -190,6 +213,10 @@ export interface ExtensionPrefs extends Record<string, unknown> {
   pmFokDepthBuffer: PmFokDepthBufferPrefs;
   /** PF 套利：有 fo 时读打折档（展示/扫描/对冲/限价）；无 fo 不打折；默认关 = 裸限价 */
   pfArbPriceBuffer: PfArbPriceBufferPrefs;
+  /**
+   * 补单赔率上下沿。默认关；UI 在参数配置「补单配置」，存储仍走 Extensions。
+   */
+  makeupOddsBand: MakeupOddsBandPrefs;
   /**
    * 控制台 UI 皮肤（「界面」Tab）。
    * default = 现有深色；brutal = 粗边框；paper = 浅纸感；terminal = 终端风。
@@ -289,6 +316,7 @@ export function createDefaultExtensionPrefs(): ExtensionPrefs {
     pmArbPriceBuffer: createDefaultPmArbPriceBufferPrefs(),
     pmFokDepthBuffer: createDefaultPmFokDepthBufferPrefs(),
     pfArbPriceBuffer: createDefaultPfArbPriceBufferPrefs(),
+    makeupOddsBand: createDefaultMakeupOddsBandPrefs(),
     uiTheme: "default",
   };
 }
@@ -362,6 +390,30 @@ function normalizePmFokDepthBuffer(raw: unknown): PmFokDepthBufferPrefs {
   };
 }
 
+export function normalizeMakeupOddsBand(raw: unknown): MakeupOddsBandPrefs {
+  const defaults = createDefaultMakeupOddsBandPrefs();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw))
+    return defaults;
+  const row = raw as Record<string, unknown>;
+  const upper = Number(row.upper);
+  const lowerMissing = row.lower == null || row.lower === "";
+  const lower = Number(row.lower);
+  return {
+    enabled: row.enabled === true,
+    upper: Number.isFinite(upper) && upper > 1 && upper <= 1.5
+      ? Math.round(upper * 1000) / 1000
+      : defaults.upper,
+    // el-input-number 清空为 null，不能当成「下沿 0=关闭」
+    lower: lowerMissing
+      ? defaults.lower
+      : lower === 0
+        ? 0
+        : Number.isFinite(lower) && lower > 0 && lower < 1
+          ? Math.round(Math.max(0.5, lower) * 1000) / 1000
+          : defaults.lower,
+  };
+}
+
 function normalizePfArbPriceBuffer(raw: unknown): PfArbPriceBufferPrefs {
   const defaults = createDefaultPfArbPriceBufferPrefs();
   if (!raw || typeof raw !== "object" || Array.isArray(raw))
@@ -393,6 +445,7 @@ export function normalizeExtensionPrefs(raw: unknown): ExtensionPrefs {
     pmArbPriceBuffer: normalizePmArbPriceBuffer(row.pmArbPriceBuffer),
     pmFokDepthBuffer: normalizePmFokDepthBuffer(row.pmFokDepthBuffer),
     pfArbPriceBuffer: normalizePfArbPriceBuffer(row.pfArbPriceBuffer),
+    makeupOddsBand: normalizeMakeupOddsBand(row.makeupOddsBand),
     uiTheme: normalizeUiTheme(row.uiTheme),
     // pbWsShadowUi 仅本机 localStorage，故意不从 RDS / Extensions 读取或写回
   };

@@ -13,6 +13,10 @@ import {
 import UserConfigPanel from "@/components/user/UserConfigPanel.vue";
 import { normalizeWaitTime } from "@/shared/betTiming";
 import { useUserStore } from "@/stores/userStore";
+import {
+  createDefaultMakeupOddsBandPrefs,
+  normalizeMakeupOddsBand,
+} from "@/types/extensionPrefs";
 
 const props = defineProps<{
   open: boolean;
@@ -26,7 +30,10 @@ const userStore = useUserStore();
 const { configSaving: saving } = storeToRefs(userStore);
 
 let form = reactive(createUserConfigFormState(userStore.config));
+const makeupOddsBand = reactive(createDefaultMakeupOddsBandPrefs());
 const autoOpenDate = ref<Date | null>(null);
+/** extras 已写入草稿后才允许保存，避免默认上下沿盖掉 RDS */
+const extrasSynced = ref(false);
 
 const visible = computed({
   get: () => props.open,
@@ -36,29 +43,44 @@ const visible = computed({
   },
 });
 
+function syncMakeupOddsBandFromStore() {
+  Object.assign(makeupOddsBand, structuredClone(
+    normalizeMakeupOddsBand(userStore.extensionPrefs.makeupOddsBand),
+  ));
+}
+
 function syncFormFromStore() {
   Object.assign(form, createUserConfigFormState(userStore.config));
   autoOpenDate.value = form.bettingAutoOpenTime ? new Date(form.bettingAutoOpenTime) : null;
+  syncMakeupOddsBandFromStore();
 }
 
 watch(autoOpenDate, (v) => {
   form.bettingAutoOpenTime = v ? v.getTime() : 0;
 });
 
-function syncForm() {
+async function syncForm() {
   if (props.previewForm) {
     Object.assign(form, structuredClone(props.previewForm));
     autoOpenDate.value = form.bettingAutoOpenTime ? new Date(form.bettingAutoOpenTime) : null;
+    extrasSynced.value = true;
     return;
   }
+  extrasSynced.value = false;
+  await userStore.loadExtras();
+  if (!userStore.extrasLoaded)
+    await userStore.loadExtras();
+  if (!userStore.extrasLoaded)
+    return;
   syncFormFromStore();
+  extrasSynced.value = true;
 }
 
 watch(
   () => props.open,
   (v) => {
     if (v)
-      syncForm();
+      void syncForm();
   },
 );
 
@@ -66,23 +88,23 @@ watch(
   () => props.previewForm,
   () => {
     if (props.open && props.previewForm)
-      syncForm();
+      void syncForm();
   },
   { deep: true },
 );
 
 onMounted(async () => {
   if (props.previewForm) {
-    syncForm();
+    await syncForm();
     return;
   }
   if (!userStore.configLoaded)
     await userStore.loadConfig();
-  syncFormFromStore();
+  await syncForm();
 });
 
 async function save() {
-  if (props.readonly)
+  if (props.readonly || !extrasSynced.value)
     return;
   Object.assign(userStore.config, {
     ...form,
@@ -106,10 +128,23 @@ async function save() {
     waitTime: normalizeWaitTime(form.waitTime),
   });
   try {
+    await userStore.loadExtras();
+    const nextBand = normalizeMakeupOddsBand({ ...makeupOddsBand });
+    const prevBand = normalizeMakeupOddsBand(userStore.extensionPrefs.makeupOddsBand);
+    const bandChanged = JSON.stringify(nextBand) !== JSON.stringify(prevBand);
     const result = await userStore.saveConfig();
-    if (result.ok)
-      ElMessage.success("保存成功");
-    else ElMessage.error(result.msg || "保存失败");
+    if (!result.ok) {
+      ElMessage.error(result.msg || "保存失败");
+      return;
+    }
+    if (bandChanged) {
+      userStore.extensionPrefs.makeupOddsBand = nextBand;
+      await userStore.saveExtensionPrefs();
+    }
+    ElMessage.success("保存成功");
+  }
+  catch (err) {
+    ElMessage.error(err instanceof Error ? err.message : "保存失败");
   }
   finally {
     emit("close");
@@ -128,14 +163,20 @@ async function save() {
     :close-on-press-escape="false"
     :close-on-click-modal="false"
   >
-    <UserConfigPanel v-model:auto-open-date="autoOpenDate" v-model:form="form" :readonly="readonly">
+    <UserConfigPanel
+      v-model:auto-open-date="autoOpenDate"
+      v-model:form="form"
+      :makeup-odds-band="previewForm ? undefined : makeupOddsBand"
+      :readonly="readonly"
+    >
       <template v-if="!readonly" #footer>
         <div class="flex flex-center" style="padding-top: 8px">
           <el-button
             size="default"
             type="primary"
             class="am-icon-save"
-            :loading="saving"
+            :loading="saving || !extrasSynced"
+            :disabled="!extrasSynced"
             round
             style="width: 240px"
             @click="save"

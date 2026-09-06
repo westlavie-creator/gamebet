@@ -34,6 +34,7 @@ const defaultPrefs = {
   pmArbPriceBuffer: { enabled: false, multiplier: 1.01 },
   pmFokDepthBuffer: { enabled: false, multiplier: 1.5 },
   pfArbPriceBuffer: { enabled: false, multiplier: 1.01 },
+  makeupOddsBand: { enabled: false, upper: 1.02, lower: 0.96 },
   uiTheme: "default" as const,
 };
 
@@ -320,6 +321,29 @@ describe("extensionPrefs", () => {
     expect(normalizeExtensionPrefs({
       valueBetSoftPlatforms: ["PredictFun"],
     }).valueBetSoftPlatforms).toEqual(defaultPrefs.valueBetSoftPlatforms);
+  });
+
+  it("defaults makeupOddsBand off at 1.02 / 0.96", () => {
+    expect(createDefaultExtensionPrefs().makeupOddsBand).toEqual({
+      enabled: false,
+      upper: 1.02,
+      lower: 0.96,
+    });
+    expect(normalizeExtensionPrefs({
+      makeupOddsBand: { enabled: true, upper: 1.03, lower: 0.95 },
+    }).makeupOddsBand).toEqual({ enabled: true, upper: 1.03, lower: 0.95 });
+    expect(normalizeExtensionPrefs({
+      makeupOddsBand: { enabled: true, upper: 0.9, lower: 1.1 },
+    }).makeupOddsBand).toEqual({ enabled: true, upper: 1.02, lower: 0.96 });
+    expect(normalizeExtensionPrefs({
+      makeupOddsBand: { enabled: true, upper: 1.02, lower: 0 },
+    }).makeupOddsBand.lower).toBe(0);
+    expect(normalizeExtensionPrefs({
+      makeupOddsBand: { enabled: true, upper: 1.02, lower: 0.3 },
+    }).makeupOddsBand.lower).toBe(0.5);
+    expect(normalizeExtensionPrefs({
+      makeupOddsBand: { enabled: true, upper: 1.02, lower: null },
+    }).makeupOddsBand.lower).toBe(0.96);
   });
 
   it("defaults arbAllowedPlatforms to null (unrestricted)", () => {

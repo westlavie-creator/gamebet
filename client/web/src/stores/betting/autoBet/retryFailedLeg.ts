@@ -11,10 +11,16 @@ import { isPendingConfirmVenueProvider } from "@changmen/shared/account_multiply
 import { useAccountStore } from "@/stores/accountStore";
 import { readUsedAccounts } from "@/stores/betting/successMarkers";
 import { useMatchStore } from "@/stores/matchStore";
+import { useUserStore } from "@/stores/userStore";
+import {
+  filterMakeupOddsBandCandidates,
+  isMakeupOddsBandEnabled,
+} from "@/extensions/arbBet/makeupOddsBand";
 
 /**
  * 对齐 bundle：一侧成功、一侧失败时换平台重试失败腿（最多 3 轮）。
  * anyOdds 仅影响最低赔阈值（makeProfit vs anyOddsProfit）。
+ * `makeupOddsBand` 开启时替代该地板（与补单消费同一扇门）；关闭时本函数与改前一致。
  * 选账号 filter 与 bundle 主循环 anyOdds 段一致：pause / 已试平台 / minOdds / betTarget。
  */
 export async function retryFailedLeg(
@@ -30,6 +36,8 @@ export async function retryFailedLeg(
 ): Promise<{ leg: BetOption; account: PlatformAccount; result: BetResult } | null> {
   const accountStore = useAccountStore();
   const matchStore = useMatchStore();
+  const bandPrefs = useUserStore().extensionPrefs?.makeupOddsBand;
+  const useBand = isMakeupOddsBandEnabled(bandPrefs);
   const profitThreshold = config.anyOdds ? config.anyOddsProfit : config.makeProfit;
   const minOdds = 1 / (1 / profitThreshold - 1 / successLeg.odds);
 
@@ -38,7 +46,19 @@ export async function retryFailedLeg(
   for (let round = 0; round < 3; round++) {
     bet.items.forEach(item => item.updateOdds());
 
-    const candidates = bet.items
+    const banded = useBand && bandPrefs
+      ? filterMakeupOddsBandCandidates(
+          bet.items
+            .filter(item => !tried.includes(item.type))
+            .sort(
+              (a, b) => b.getOdds(failedLeg.target) - a.getOdds(failedLeg.target),
+            ),
+          item => item.getOdds(failedLeg.target),
+          successLeg.odds,
+          bandPrefs,
+        )
+      : null;
+    const candidates = banded ?? bet.items
       .filter(
         item =>
           !tried.includes(item.type)
@@ -48,8 +68,12 @@ export async function retryFailedLeg(
         (a, b) => b.getOdds(failedLeg.target) - a.getOdds(failedLeg.target),
       );
 
-    if (!candidates.length)
+    if (!candidates.length) {
+      // 带内空仓（含 []）：继续后续轮 updateOdds；公式无解 null 已回退旧地板，仍空则早退
+      if (banded !== null)
+        continue;
       break;
+    }
 
     let pickedAccount: PlatformAccount | undefined;
     let pickedItem: ViewBetItem | undefined;

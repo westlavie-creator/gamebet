@@ -18,6 +18,10 @@ import { useActiveBetRunStore } from "@/stores/activeBetRunStore";
 import { useUserStore } from "@/stores/userStore";
 import { useLoseOrderStore } from "@/stores/loseOrderStore";
 import { useMatchStore } from "@/stores/matchStore";
+import {
+  filterMakeupOddsBandCandidates,
+  isMakeupOddsBandEnabled,
+} from "@/extensions/arbBet/makeupOddsBand";
 
 export interface LoseOrderTickContext {
   setMessage: (msg: string) => void;
@@ -87,8 +91,20 @@ export async function processLoseOrders(ctx: LoseOrderTickContext): Promise<void
     if (resumed === "handled")
       continue;
 
+    const bandPrefs = user.extensionPrefs?.makeupOddsBand;
+    const useBand = isMakeupOddsBandEnabled(bandPrefs) && !order.isCreateOrder;
     const minOdds = order.getOdds(config.makeProfit);
-    const candidates = bet.items
+    const banded = useBand && bandPrefs
+      ? filterMakeupOddsBandCandidates(
+          [...bet.items].sort(
+            (a, b) => b.getOdds(order.target) - a.getOdds(order.target),
+          ),
+          item => item.getOdds(order.target),
+          order.betOdds,
+          bandPrefs,
+        )
+      : null;
+    const candidates = banded ?? bet.items
       .filter(item => item.getOdds(order.target) >= minOdds)
       .sort((a, b) => b.getOdds(order.target) - a.getOdds(order.target));
 
