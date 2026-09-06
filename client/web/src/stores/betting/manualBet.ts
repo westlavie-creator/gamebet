@@ -4,6 +4,7 @@ import { accountPassesMainBetFilter } from "@/domain/betting/betFilters";
 import { isSingleLegRateAtOdds } from "@/domain/betting/singleLegRate";
 import { BetOption } from "@changmen/client-core/models/betOption";
 import { wait } from "@changmen/client-core/shared/wait";
+import { isPrematchFullMarketAllowed } from "@/extensions/prematchFullOnly";
 import type { UserConfig } from "@/types/userConfig";
 import { readValueBetMoney } from "@/extensions/valueBet/valueBetStake";
 import { manualBetToastSeconds } from "@/shared/betTiming";
@@ -62,6 +63,10 @@ export async function runManualBet(
   const user = useUserStore();
   const matchStore = useMatchStore();
   const { setMessage } = ctx;
+
+  // [changmen 扩展] 赛前全场：关则不进入；开则地图/滚球全场不弹 prompt
+  if (!isPrematchFullMarketAllowed(match, bet))
+    return;
 
   // 先 getAccount(type, 0)，无账号再提示；有账号才 prompt 金额
   const account = accountStore.getAccount(item.type, 0);

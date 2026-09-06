@@ -3,6 +3,7 @@ import type { ArbAttemptPhase } from "@/stores/betting/autoBet/arbAttemptMetrics
 import type { ArbBetAttemptParams } from "@/stores/betting/autoBet/phases/types";
 import type { UserConfig } from "@/types/userConfig";
 import { isMapMuteActive } from "@/extensions/mapBetMute";
+import { isPrematchFullMarketAllowed } from "@/extensions/prematchFullOnly";
 import {
   recordArbAttemptMetric,
 } from "@/stores/betting/autoBet/arbAttemptMetrics";
@@ -24,6 +25,9 @@ export async function executeArbBet(params: {
   config: UserConfig;
   setMessage: (msg: string) => void;
 }): Promise<void> {
+  // [changmen 扩展] 赛前全场过滤：关则恒放行；开则只留下未开赛全场
+  if (!isPrematchFullMarketAllowed(params.match, params.bet))
+    return;
   // [changmen 扩展] 用户折叠的全场 / 地图：跳过本盘（live 局互斥，不跳过）
   if (isMapMuteActive(params.match.id, params.bet.round, params.match.liveRound))
     return;

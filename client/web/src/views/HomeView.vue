@@ -16,6 +16,11 @@ import {
   toggleMapMuteGlobal,
 } from "@/extensions/mapBetMute";
 import {
+  filterMatchesForPrematchFull,
+  prematchFullMode,
+  setPrematchFullMode,
+} from "@/extensions/prematchFullOnly";
+import {
   mountAppSession,
   stopAppSession,
 } from "@/runtime/appSession";
@@ -48,6 +53,35 @@ function onToggleMapMuteGlobal() {
   toggleMapMuteGlobal();
 }
 
+/** [changmen 扩展] 只看赛前全场；默认 off，与折叠正交 */
+const prematchModeRef = prematchFullMode();
+const prematchFullOn = computed(() => prematchModeRef.value !== "off");
+const prematchMode = computed(() => prematchModeRef.value);
+
+function onTogglePrematchFull() {
+  if (prematchModeRef.value === "off")
+    setPrematchFullMode("liveRound");
+  else
+    setPrematchFullMode("off");
+}
+
+/** 开赛时间模式：到点后刷新列表；其它模式不挂定时器 */
+const startAtTick = ref(0);
+let startAtTickTimer: ReturnType<typeof setInterval> | null = null;
+
+watch(prematchModeRef, (mode) => {
+  if (mode === "startAt") {
+    startAtTick.value = Date.now();
+    if (!startAtTickTimer)
+      startAtTickTimer = setInterval(() => { startAtTick.value = Date.now(); }, 5000);
+    return;
+  }
+  if (startAtTickTimer) {
+    clearInterval(startAtTickTimer);
+    startAtTickTimer = null;
+  }
+}, { immediate: true });
+
 /** 新标签打开体育页，本页电竞 runtime 继续跑 */
 function openSportsInNewTab() {
   const href = router.resolve({ name: "sports-board", params: { sport: "football" } }).href;
@@ -55,27 +89,29 @@ function openSportsInNewTab() {
 }
 
 const filteredMatchs = computed(() => {
+  void startAtTick.value;
+  void prematchModeRef.value;
   const q = searchQuery.value.trim().toLowerCase();
-  if (!q)
-    return matchs.value;
-  return matchs.value.filter((m) => {
-    if (String(m.id).includes(q))
-      return true;
-    if (m.title.toLowerCase().includes(q))
-      return true;
-    if (m.game.toLowerCase().includes(q))
-      return true;
-    return m.bets.some(
-      b => b.homeName.toLowerCase().includes(q) || b.awayName.toLowerCase().includes(q),
-    );
-  });
+  const searched = !q
+    ? matchs.value
+    : matchs.value.filter((m) => {
+      if (String(m.id).includes(q))
+        return true;
+      if (m.title.toLowerCase().includes(q))
+        return true;
+      if (m.game.toLowerCase().includes(q))
+        return true;
+      return m.bets.some(
+        b => b.homeName.toLowerCase().includes(q) || b.awayName.toLowerCase().includes(q),
+      );
+    });
+  return filterMatchesForPrematchFull(searched);
 });
 
 const matchCountLabel = computed(() => {
   const total = matchs.value.length;
   const shown = filteredMatchs.value.length;
-  const q = searchQuery.value.trim();
-  if (q && shown !== total)
+  if (shown !== total)
     return `${shown} / ${total} 场`;
   return `${shown} 场`;
 });
@@ -97,6 +133,10 @@ watch(extensionReady, (ext) => {
 });
 
 onUnmounted(() => {
+  if (startAtTickTimer) {
+    clearInterval(startAtTickTimer);
+    startAtTickTimer = null;
+  }
   stopAppSession();
 });
 
@@ -161,6 +201,47 @@ async function logout() {
             >
               {{ mapMuteGlobalOn ? "开" : "关" }} 全部盘口
             </button>
+            <div class="prematch-full-toggle-group">
+              <button
+                type="button"
+                class="map-mute-global-toggle"
+                :class="{ 'is-on': prematchFullOn }"
+                :title="prematchFullOn
+                  ? '关闭后恢复显示全部盘口；不改折叠、不拦补单'
+                  : '只显示未开赛的全场盘口，地图与滚球不展示、不新开仓。无 OB 时「OB开打」无法判断是否已开赛'"
+                :aria-pressed="prematchFullOn"
+                @click="onTogglePrematchFull"
+              >
+                {{ prematchFullOn ? "开" : "关" }} 赛前全场
+              </button>
+              <span
+                v-if="prematchFullOn"
+                class="prematch-full-criteria"
+                role="group"
+                aria-label="赛前判定方式"
+              >
+                <button
+                  type="button"
+                  class="prematch-full-criteria-btn"
+                  :class="{ 'is-on': prematchMode === 'liveRound' }"
+                  title="用 OB 开打状态（liveRound）。没挂 OB 的场会一直当未开赛"
+                  :aria-pressed="prematchMode === 'liveRound'"
+                  @click="setPrematchFullMode('liveRound')"
+                >
+                  OB开打
+                </button>
+                <button
+                  type="button"
+                  class="prematch-full-criteria-btn"
+                  :class="{ 'is-on': prematchMode === 'startAt' }"
+                  title="用开赛时间：当前时间到点即视为已开赛，延迟开赛的全场会被藏掉"
+                  :aria-pressed="prematchMode === 'startAt'"
+                  @click="setPrematchFullMode('startAt')"
+                >
+                  开赛时间
+                </button>
+              </span>
+            </div>
             <MakeupCalcBar />
             <el-button
               class="sports-open-btn"
@@ -178,6 +259,9 @@ async function logout() {
           </div>
           <div v-else-if="searchQuery" class="match-empty">
             无匹配比赛
+          </div>
+          <div v-else-if="prematchFullOn" class="match-empty">
+            无赛前全场
           </div>
         </div>
       </el-main>

@@ -58,6 +58,8 @@ vi.mock("element-plus", () => ({
   },
 }));
 
+import { ElMessageBox } from "element-plus";
+import { resetPrematchFullOnlyForTests, setPrematchFullMode } from "@/extensions/prematchFullOnly";
 import { runManualBet } from "@/stores/betting/manualBet";
 
 describe("runManualBet post-success sync", () => {
@@ -79,6 +81,9 @@ describe("runManualBet post-success sync", () => {
       orderId: "0xabc",
       tip: { pmOptimisticSaved: true },
     });
+    resetPrematchFullOnlyForTests();
+    vi.mocked(ElMessageBox.prompt).mockClear();
+    vi.mocked(ElMessageBox.alert).mockClear();
   });
 
   it("PM matched + optimistic saved: refresh without waitForOrderId", async () => {
@@ -164,5 +169,34 @@ describe("runManualBet post-success sync", () => {
       expect.anything(),
       { waitForOrderId: "0xfallback" },
     );
+  });
+
+  it("[changmen 扩展] 赛前全场模式下地图不弹 prompt", async () => {
+    setPrematchFullMode("liveRound");
+    const match = {
+      id: 1,
+      title: "A vs B",
+      bets: [],
+      liveRound: 0,
+      startAt: Date.now() + 86_400_000,
+    } as unknown as ViewMatch;
+    const bet = {
+      id: 1,
+      round: 1,
+      homeName: "A",
+      awayName: "B",
+      getBetName: () => "Map 1",
+      items: [],
+    } as unknown as ViewBet;
+    const item = {
+      type: "Polymarket",
+      getOdds: () => 1.8,
+    } as unknown as ViewBetItem;
+
+    await runManualBet(match, bet, item, "Home", { setMessage: vi.fn() });
+
+    expect(ElMessageBox.prompt).not.toHaveBeenCalled();
+    expect(ElMessageBox.alert).not.toHaveBeenCalled();
+    expect(getAccount).not.toHaveBeenCalled();
   });
 });

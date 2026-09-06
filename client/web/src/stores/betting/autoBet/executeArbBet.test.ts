@@ -3,6 +3,10 @@ import {
   resetMapBetMuteForTests,
   toggleMapMute,
 } from "@/extensions/mapBetMute";
+import {
+  resetPrematchFullOnlyForTests,
+  setPrematchFullMode,
+} from "@/extensions/prematchFullOnly";
 import { executeArbBet } from "@/stores/betting/autoBet/executeArbBet";
 import { createDefaultUserConfig } from "@/types/userConfig";
 
@@ -49,6 +53,7 @@ describe("executeArbBet orchestration", () => {
     vi.clearAllMocks();
     mockSessionStorage();
     resetMapBetMuteForTests();
+    resetPrematchFullOnlyForTests();
   });
 
   it("[changmen 扩展] 折叠全场时不进 prepare", async () => {
@@ -142,5 +147,39 @@ describe("executeArbBet orchestration", () => {
     expect(recordArbAttemptMetric).toHaveBeenCalledWith(
       expect.objectContaining({ stop: "skip_check" }),
     );
+  });
+
+  it("[changmen 扩展] 赛前全场 off 时未折叠的地图仍进 prepare", async () => {
+    prepareArbAttempt.mockResolvedValue(null);
+    await executeArbBet({
+      match: { id: 1, liveRound: 0, startAt: Date.now() + 86_400_000 } as never,
+      bet: { id: 10, round: 1 } as never,
+      config: createDefaultUserConfig(),
+      setMessage: vi.fn(),
+    });
+    expect(prepareArbAttempt).toHaveBeenCalled();
+  });
+
+  it("[changmen 扩展] 赛前全场 liveRound 模式下地图不进 prepare", async () => {
+    setPrematchFullMode("liveRound");
+    await executeArbBet({
+      match: { id: 1, liveRound: 0, startAt: Date.now() + 86_400_000 } as never,
+      bet: { id: 10, round: 1 } as never,
+      config: createDefaultUserConfig(),
+      setMessage: vi.fn(),
+    });
+    expect(prepareArbAttempt).not.toHaveBeenCalled();
+    expect(recordArbAttemptMetric).not.toHaveBeenCalled();
+  });
+
+  it("[changmen 扩展] 赛前全场 liveRound 模式下滚球全场不进 prepare", async () => {
+    setPrematchFullMode("liveRound");
+    await executeArbBet({
+      match: { id: 1, liveRound: 1, startAt: Date.now() + 86_400_000 } as never,
+      bet: { id: 10, round: 0 } as never,
+      config: createDefaultUserConfig(),
+      setMessage: vi.fn(),
+    });
+    expect(prepareArbAttempt).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
 import {
   collectValueBetAutoCandidates,
   isValueBetAutoCooling,
@@ -7,6 +7,10 @@ import {
   resetValueBetAutoBetForTests,
 } from "@/extensions/valueBet/valueBetAutoBet";
 import { valueBetCalcOptsFromPrefs } from "@/extensions/valueBet/evConfig";
+import {
+  resetPrematchFullOnlyForTests,
+  setPrematchFullMode,
+} from "@/extensions/prematchFullOnly";
 
 describe("isValueBetAutoEligible", () => {
   const base = {
@@ -42,6 +46,10 @@ describe("isValueBetAutoEligible", () => {
 });
 
 describe("collectValueBetAutoCandidates", () => {
+  beforeEach(() => {
+    resetPrematchFullOnlyForTests();
+  });
+
   function stubItem(type: string, home: number, away: number) {
     return {
       type,
@@ -115,6 +123,21 @@ describe("collectValueBetAutoCandidates", () => {
       [match] as never,
       calcOpts,
       { enabled: true, minEdgePct: 3, maxEdgePct: 20, minOdds: 2.0, maxOdds: 10, maxPerMap: 1 },
+      { isMuted: () => false, mapCount: () => 0, isCooling: () => false },
+    )).toEqual([]);
+  });
+
+  it("[changmen 扩展] 赛前全场模式下跳过地图盘", () => {
+    setPrematchFullMode("liveRound");
+    const pb = stubItem("PB", 1.9, 1.95);
+    const ray = stubItem("RAY", 2.2, 1.7);
+    const bet = { round: 1, items: [pb, ray] };
+    const match = { id: 9, liveRound: 0, startAt: Date.now() + 86_400_000, bets: [bet] };
+    const calcOpts = valueBetCalcOptsFromPrefs({ sharp: "PB" });
+    expect(collectValueBetAutoCandidates(
+      [match] as never,
+      calcOpts,
+      { enabled: true, minEdgePct: 3, maxEdgePct: 20, minOdds: 1.3, maxOdds: 10, maxPerMap: 1 },
       { isMuted: () => false, mapCount: () => 0, isCooling: () => false },
     )).toEqual([]);
   });

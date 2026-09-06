@@ -7,6 +7,7 @@ import type { BetSide, ViewBet, ViewBetItem, ViewMatch } from "@/models/match";
 import type { ValueBetAutoBetPrefs } from "@/types/extensionPrefs";
 import { accountsFundingReady } from "@/stores/account/accountPicker";
 import { isMapMuteActive } from "@/extensions/mapBetMute";
+import { isPrematchFullMarketAllowed } from "@/extensions/prematchFullOnly";
 import {
   computeValueBetEdge,
   type ValueBetEdgeSnapshot,
@@ -85,6 +86,8 @@ export function collectValueBetAutoCandidates(
 
   for (const match of matches) {
     for (const bet of match.bets) {
+      if (!isPrematchFullMarketAllowed(match, bet))
+        continue;
       if (ctx.isMuted(match.id, bet.round, match.liveRound))
         continue;
       if (ctx.isCooling(match.id, bet.round))

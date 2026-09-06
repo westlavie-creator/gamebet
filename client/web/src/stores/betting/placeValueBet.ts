@@ -2,6 +2,7 @@ import type { BetSide, ViewBet, ViewBetItem, ViewMatch } from "@/models/match";
 import { accountPassesMainBetFilter } from "@/domain/betting/betFilters";
 import { isSingleLegRateAtOdds } from "@/domain/betting/singleLegRate";
 import { isMapMuteActive } from "@/extensions/mapBetMute";
+import { isPrematchFullMarketAllowed } from "@/extensions/prematchFullOnly";
 import {
   computeValueBetEdge,
   isValueBetPositiveEdge,
@@ -139,7 +140,8 @@ function evaluateLivePlaceSafety(
     edge: snap.edge,
     minEdge: autoGate?.minEdge ?? minEdge,
     maxEdge: autoGate?.maxEdge,
-    muted: isMapMuteActive(match.id, bet.round, match.liveRound),
+    muted: isMapMuteActive(match.id, bet.round, match.liveRound)
+      || !isPrematchFullMarketAllowed(match, bet),
     checkMute: true,
     mapCount: getValueBetMapCount(match.id, bet.round),
     maxPerMap,

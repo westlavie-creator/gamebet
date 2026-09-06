@@ -69,6 +69,42 @@
   border-color: color-mix(in srgb, var(--cm-color-warning, #e6a23c) 55%, transparent);
 }
 
+/* [changmen 扩展] 赛前全场：与全部盘口折叠并列，不改 mute 按钮 */
+.home-main .match-search-row .prematch-full-toggle-group {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.home-main .match-search-row .prematch-full-criteria {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+}
+.home-main .match-search-row .prematch-full-criteria-btn {
+  height: 28px;
+  padding: 0 8px;
+  margin: 0;
+  border: 1px solid var(--cm-border-color, hsla(0, 0%, 100%, 0.25));
+  border-radius: 4px;
+  background: transparent;
+  color: var(--cm-color-muted, #aaa);
+  font-size: 12px;
+  line-height: 26px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.home-main .match-search-row .prematch-full-criteria-btn:hover {
+  color: var(--cm-color-text, #fff);
+  border-color: var(--cm-color-text, hsla(0, 0%, 100%, 0.5));
+}
+.home-main .match-search-row .prematch-full-criteria-btn.is-on {
+  color: var(--cm-color-warning, #e6a23c);
+  border-color: color-mix(in srgb, var(--cm-color-warning, #e6a23c) 55%, transparent);
+}
+
 .home-main .sport-tab-row {
   display: flex;
   flex: 0 0 auto;
