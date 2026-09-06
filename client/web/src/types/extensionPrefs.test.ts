@@ -32,6 +32,7 @@ const defaultPrefs = {
   arbFailAutoSell: { enabled: false },
   arbEarlyLockSell: { enabled: false, mode: "floor" as const, minExtraProfitPct: 0 },
   pmArbPriceBuffer: { enabled: false, multiplier: 1.01 },
+  pmFokDepthBuffer: { enabled: false, multiplier: 1.5 },
   pfArbPriceBuffer: { enabled: false, multiplier: 1.01 },
   uiTheme: "default" as const,
 };
@@ -267,6 +268,19 @@ describe("extensionPrefs", () => {
     expect(normalizeExtensionPrefs({
       pmArbPriceBuffer: { enabled: true, multiplier: 2 },
     }).pmArbPriceBuffer.multiplier).toBe(1.01);
+  });
+
+  it("defaults pmFokDepthBuffer off at 1.5", () => {
+    expect(createDefaultExtensionPrefs().pmFokDepthBuffer).toEqual({
+      enabled: false,
+      multiplier: 1.5,
+    });
+    expect(normalizeExtensionPrefs({
+      pmFokDepthBuffer: { enabled: true, multiplier: 2 },
+    }).pmFokDepthBuffer).toEqual({ enabled: true, multiplier: 2 });
+    expect(normalizeExtensionPrefs({
+      pmFokDepthBuffer: { enabled: true, multiplier: 11 },
+    }).pmFokDepthBuffer.multiplier).toBe(1.5);
   });
 
   it("defaults pfArbPriceBuffer off at 1.01", () => {

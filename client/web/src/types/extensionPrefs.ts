@@ -87,6 +87,17 @@ export function createDefaultPmArbPriceBufferPrefs(): PmArbPriceBufferPrefs {
   return { enabled: false, multiplier: 1.01 };
 }
 
+/** [changmen 扩展] PM FOK：成交价及更优档须 ≥ 本金 × multiplier；默认关 = 现网 1× */
+export interface PmFokDepthBufferPrefs {
+  enabled: boolean;
+  /** 深度倍数；默认 1.5 */
+  multiplier: number;
+}
+
+export function createDefaultPmFokDepthBufferPrefs(): PmFokDepthBufferPrefs {
+  return { enabled: false, multiplier: 1.5 };
+}
+
 /** [changmen 扩展] PF 套利：卖一 × multiplier（展示 + 限价；见 PF_ARB_PRICE_BUFFER_PLAN.md） */
 export interface PfArbPriceBufferPrefs {
   enabled: boolean;
@@ -175,6 +186,8 @@ export interface ExtensionPrefs extends Record<string, unknown> {
   arbEarlyLockSell: ArbEarlyLockSellPrefs;
   /** PM 套利：有 fo 时读打折档（展示/扫描/对冲/FOK）；无 fo 不打折；默认关 = 现网 */
   pmArbPriceBuffer: PmArbPriceBufferPrefs;
+  /** PM FOK：成交价及更优档深度倍数；默认关 = 现网 1× */
+  pmFokDepthBuffer: PmFokDepthBufferPrefs;
   /** PF 套利：有 fo 时读打折档（展示/扫描/对冲/限价）；无 fo 不打折；默认关 = 裸限价 */
   pfArbPriceBuffer: PfArbPriceBufferPrefs;
   /**
@@ -274,6 +287,7 @@ export function createDefaultExtensionPrefs(): ExtensionPrefs {
     arbFailAutoSell: createDefaultArbFailAutoSell(),
     arbEarlyLockSell: createDefaultArbEarlyLockSell(),
     pmArbPriceBuffer: createDefaultPmArbPriceBufferPrefs(),
+    pmFokDepthBuffer: createDefaultPmFokDepthBufferPrefs(),
     pfArbPriceBuffer: createDefaultPfArbPriceBufferPrefs(),
     uiTheme: "default",
   };
@@ -334,6 +348,20 @@ function normalizePmArbPriceBuffer(raw: unknown): PmArbPriceBufferPrefs {
   };
 }
 
+function normalizePmFokDepthBuffer(raw: unknown): PmFokDepthBufferPrefs {
+  const defaults = createDefaultPmFokDepthBufferPrefs();
+  if (!raw || typeof raw !== "object" || Array.isArray(raw))
+    return defaults;
+  const row = raw as Record<string, unknown>;
+  const multiplier = Number(row.multiplier);
+  return {
+    enabled: row.enabled === true,
+    multiplier: Number.isFinite(multiplier) && multiplier >= 1.1 && multiplier <= 10
+      ? Math.round(multiplier * 10) / 10
+      : defaults.multiplier,
+  };
+}
+
 function normalizePfArbPriceBuffer(raw: unknown): PfArbPriceBufferPrefs {
   const defaults = createDefaultPfArbPriceBufferPrefs();
   if (!raw || typeof raw !== "object" || Array.isArray(raw))
@@ -363,6 +391,7 @@ export function normalizeExtensionPrefs(raw: unknown): ExtensionPrefs {
     arbFailAutoSell: normalizeArbFailAutoSell(row.arbFailAutoSell),
     arbEarlyLockSell: normalizeArbEarlyLockSell(row.arbEarlyLockSell),
     pmArbPriceBuffer: normalizePmArbPriceBuffer(row.pmArbPriceBuffer),
+    pmFokDepthBuffer: normalizePmFokDepthBuffer(row.pmFokDepthBuffer),
     pfArbPriceBuffer: normalizePfArbPriceBuffer(row.pfArbPriceBuffer),
     uiTheme: normalizeUiTheme(row.uiTheme),
     // pbWsShadowUi 仅本机 localStorage，故意不从 RDS / Extensions 读取或写回

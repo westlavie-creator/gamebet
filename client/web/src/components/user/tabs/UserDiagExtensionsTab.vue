@@ -361,6 +361,48 @@ async function save() {
           />
         </el-form-item>
 
+        <el-form-item>
+          <template #label>
+            <el-tooltip
+              placement="top"
+              :show-after="200"
+              popper-class="extensions-tab-tip"
+              content="开：成交价及更优档可立即成交额须 ≥ 下单金额 × 倍数，否则预检失败。关 = 现网 1×。更深更差档不算垫。"
+            >
+              <span class="extensions-tab__tip-label">FOK 深度倍数</span>
+            </el-tooltip>
+          </template>
+          <el-switch
+            v-model="extensionPrefs.pmFokDepthBuffer.enabled"
+            inline-prompt
+            active-text="开"
+            inactive-text="关"
+          />
+        </el-form-item>
+
+        <el-form-item>
+          <template #label>
+            <el-tooltip
+              placement="top"
+              :show-after="200"
+              popper-class="extensions-tab-tip"
+              content="成交价及更优档深度须达到下单金额的该倍数。默认 1.5；保存后写入 Extensions。"
+            >
+              <span class="extensions-tab__tip-label">深度倍数</span>
+            </el-tooltip>
+          </template>
+          <el-input-number
+            v-model="extensionPrefs.pmFokDepthBuffer.multiplier"
+            class="extensions-tab__num"
+            :min="1.1"
+            :max="10"
+            :step="0.1"
+            :precision="1"
+            :disabled="!extensionPrefs.pmFokDepthBuffer.enabled"
+            controls-position="right"
+          />
+        </el-form-item>
+
         <h3 class="extensions-tab__heading extensions-tab__heading--next">
           PredictFun
         </h3>

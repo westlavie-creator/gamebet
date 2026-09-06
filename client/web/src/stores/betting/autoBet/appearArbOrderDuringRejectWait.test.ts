@@ -6,7 +6,7 @@ import { BetOption } from "@changmen/client-core/models/betOption";
 const getOrders = vi.fn();
 const updateVenueOrders = vi.fn();
 const refreshOrderListAfterBind = vi.fn();
-const wait = vi.fn(async () => {});
+const wait = vi.fn<(ms: number) => Promise<void>>(async () => {});
 
 vi.mock("@changmen/client-core/shared/wait", () => ({
   wait: (ms: number) => wait(ms),

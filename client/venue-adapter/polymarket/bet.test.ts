@@ -1,6 +1,10 @@
 import type { PlatformAccount } from "@changmen/client-core/models/platformAccount";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { isPolymarketFokBuyFilled, isPolymarketOrderAccepted, polymarketProvider } from "./bet";
+import {
+  resetPmFokDepthBufferPrefsForTests,
+  setPmFokDepthBufferPrefs,
+} from "./pmFokDepthBufferMode";
 import { POLYMARKET_BUILDER_CODE_DEFAULT } from "./builder";
 import { POLYMARKET_CLOB_API } from "./api";
 import { resetPolymarketOrderSyncForTest } from "./pmOrderSync";
@@ -945,6 +949,7 @@ describe("isPolymarketOrderAccepted", () => {
 
 describe("polymarketProvider.checkBet", () => {
   beforeEach(() => {
+    resetPmFokDepthBufferPrefsForTests();
     vi.mocked(polymarketPluginGet).mockReset();
     vi.mocked(pmGetBook).mockReset();
     saveVenueOdds.mockReset();
@@ -1245,6 +1250,74 @@ describe("polymarketProvider.checkBet", () => {
       betMoney: 14,
       apiBetMoney: 14,
       detectionOdds: 2,
+    });
+  });
+
+  describe("pmFokDepthBuffer", () => {
+    function capOption(betMoney: number, asks: Array<{ price: string; size: string }>) {
+      vi.mocked(pmGetBook).mockResolvedValue({
+        tick_size: "0.01",
+        min_order_size: "1",
+        neg_risk: false,
+        asks,
+      });
+      return {
+        itemId: "123456789",
+        odds: 1.818,
+        betMoney,
+        data: {
+          detectionOdds: 1.818,
+          detectionMaxPrice: 0.55,
+          detectionClobPrice: 0.55,
+        },
+      };
+    }
+
+    test("off: 1× at best ask still passes (unchanged)", async () => {
+      const out = await polymarketProvider.checkBet(
+        accountWithToken("{}", { multiply: 7 }),
+        capOption(10, [{ price: "0.5", size: "20" }]) as any,
+      );
+      expect(out.checkError).toBeUndefined();
+      expect(out.data).toMatchObject({ bookPrice: 0.5, depthMultiplier: 1 });
+    });
+
+    test("on 1.5: best ask 1× fails; worse level inside cap does not count", async () => {
+      setPmFokDepthBufferPrefs({ enabled: true, multiplier: 1.5 });
+      const out = await polymarketProvider.checkBet(
+        accountWithToken("{}", { multiply: 7 }),
+        capOption(10, [
+          { price: "0.5", size: "20" },
+          { price: "0.54", size: "100" },
+        ]) as any,
+      );
+      expect(out.data).toBeNull();
+      expect(out.checkError).toContain("盘口深度不足");
+      expect(out.checkError).toContain("× 1.5");
+      expect(out.checkError).toContain("及更优");
+    });
+
+    test("on 1.5: best ask 1.5× passes at best ask", async () => {
+      setPmFokDepthBufferPrefs({ enabled: true, multiplier: 1.5 });
+      const out = await polymarketProvider.checkBet(
+        accountWithToken("{}", { multiply: 7 }),
+        capOption(10, [{ price: "0.5", size: "30" }]) as any,
+      );
+      expect(out.checkError).toBeUndefined();
+      expect(out.data).toMatchObject({ bookPrice: 0.5, depthMultiplier: 1.5 });
+    });
+
+    test("on 1.5: 1× walks to second level; P and better counts toward X", async () => {
+      setPmFokDepthBufferPrefs({ enabled: true, multiplier: 1.5 });
+      const out = await polymarketProvider.checkBet(
+        accountWithToken("{}", { multiply: 7 }),
+        capOption(10, [
+          { price: "0.5", size: "10" },
+          { price: "0.54", size: "20" },
+        ]) as any,
+      );
+      expect(out.checkError).toBeUndefined();
+      expect(out.data).toMatchObject({ bookPrice: 0.54, depthMultiplier: 1.5 });
     });
   });
 });

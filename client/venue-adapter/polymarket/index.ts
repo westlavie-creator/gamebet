@@ -24,6 +24,7 @@ export * from "./pmMarketGuard";
 export * from "./pmBetGuard";
 export * from "./pmDetection";
 export * from "./pmArbPriceBufferMode";
+export * from "./pmFokDepthBufferMode";
 export * from "./pmStake";
 export * from "./pmTickPrice";
 export * from "./pmManualSell";

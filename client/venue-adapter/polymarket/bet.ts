@@ -44,6 +44,12 @@ import { normalizePolymarketTickSize, type PolymarketTickSize } from "./pmTickPr
 import { resolvePolymarketVenueIdentityFromToken } from "./profile";
 import { polymarketPluginGet } from "./transport";
 import { pmGetBook, pmSubmitOrder } from "./pmClientApi";
+import {
+  pmFokDepthReuseMultiplier,
+  getPmFokDepthBufferPrefs,
+  pmFokDepthBufferNeedUsdc,
+  pmFokFillPriceDepthUsdc,
+} from "./pmFokDepthBufferMode";
 
 export { isPolymarketDelayedPending } from "./orderStatus";
 export {
@@ -156,6 +162,8 @@ export interface PolymarketBuyCheckData {
   side: "BUY";
   bookFetchedAt: number;
   orderOptions: PolymarketOrderOptions;
+  /** 预检时的深度倍数（关=1）；复用 book 时须一致 */
+  depthMultiplier?: number;
 }
 
 interface PolymarketOrderDiagnostic {
@@ -206,6 +214,26 @@ function asksPreview(asks: PolymarketOrderOptions["asks"]): string {
 
 function availableUsdc(asks: PolymarketOrderOptions["asks"]): number {
   return asks.reduce((sum, level) => sum + level.price * level.size, 0);
+}
+
+/** [changmen 扩展] 开：1× 成交价 P 及更优须 ≥ 本金×倍数。关：原 1×。 */
+function assertPmFokDepthAtFillPrice(
+  bookAsks: PolymarketOrderOptions["asks"],
+  amountUsdc: number,
+  fillPrice: number,
+): void {
+  const need = pmFokDepthBufferNeedUsdc(amountUsdc);
+  if (need == null)
+    return;
+  const available = pmFokFillPriceDepthUsdc(bookAsks, fillPrice);
+  if (available + 1e-9 >= need)
+    return;
+  const { multiplier } = getPmFokDepthBufferPrefs();
+  throw new Error([
+    "Polymarket FOK 盘口深度不足",
+    `- 需要 ${fmt(need, 2)} USDC（金额 ${fmt(amountUsdc, 2)} × ${multiplier}）`,
+    `- 成交价 ${fmt(fillPrice, 4)} 及更优可立即成交约 ${fmt(available, 2)} USDC`,
+  ].join("\n"));
 }
 
 function diagnosticLines(diag: PolymarketOrderDiagnostic): string[] {
@@ -318,6 +346,7 @@ function calculateBuyMarketLimitPrice(
           `- 当前盘口至少约 ${fmt(minAmount, 2)} USDC 才能买满 ${minOrderSize} 份。`,
         ].join("\n"));
       }
+      assertPmFokDepthAtFillPrice(bookAsks, amountUsdc, level.price);
       return level.price;
     }
     remaining -= notional;
@@ -451,6 +480,7 @@ function canReusePrecheckBook(
     && data.detectionOdds === detectionOdds
     && data.detectionMaxPrice === detectionMaxPriceCap
     && data.apiBetMoney === apiBetMoney
+    && (data.depthMultiplier ?? 1) === pmFokDepthReuseMultiplier()
     && now - data.bookFetchedAt <= PRECHECK_BOOK_REUSE_MS
   );
 }
@@ -584,6 +614,7 @@ export const polymarketProvider: PlatformProvider = {
         side: "BUY",
         bookFetchedAt,
         orderOptions,
+        depthMultiplier: pmFokDepthReuseMultiplier(),
       } satisfies PolymarketBuyCheckData;
     }
     catch (err) {

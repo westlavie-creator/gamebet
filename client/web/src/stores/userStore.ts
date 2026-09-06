@@ -192,6 +192,7 @@ export const useUserStore = defineStore("user", {
       }
       try {
         await this.syncPmArbPriceBufferFromPrefs();
+        await this.syncPmFokDepthBufferFromPrefs();
         await this.syncPfArbPriceBufferFromPrefs();
       }
       catch {
@@ -233,6 +234,7 @@ export const useUserStore = defineStore("user", {
       this.extensionPrefs = normalizeExtensionPrefs(ext);
       await this.syncPbCollectModeFromLocal();
       await this.syncPmArbPriceBufferFromPrefs();
+      await this.syncPmFokDepthBufferFromPrefs();
       await this.syncPfArbPriceBufferFromPrefs();
       if (gen !== this.extrasLoadGen)
         return;
@@ -268,6 +270,15 @@ export const useUserStore = defineStore("user", {
       setPmArbPriceBufferPrefs(this.extensionPrefs.pmArbPriceBuffer);
     },
 
+    /** Extensions → venue-adapter PM FOK 深度倍数（预检 1× 走出 P 后验 P 及更优） */
+    async syncPmFokDepthBufferFromPrefs() {
+      const { setPmFokDepthBufferPrefs } = await import("@changmen/venue-adapter/polymarket");
+      setPmFokDepthBufferPrefs(this.extensionPrefs.pmFokDepthBuffer ?? {
+        enabled: false,
+        multiplier: 1.5,
+      });
+    },
+
     /** Extensions → venue-adapter PF 套利缓冲配置（展示/限价接线） */
     async syncPfArbPriceBufferFromPrefs() {
       const { setPfArbPriceBufferPrefs } = await import("@changmen/venue-adapter/predictfun");
@@ -301,6 +312,7 @@ export const useUserStore = defineStore("user", {
       // 失败减仓暂锁死：保存前再归一化，避免内存/旧 KV 把 enabled:true 写回
       this.extensionPrefs = normalizeExtensionPrefs(this.extensionPrefs);
       await this.syncPmArbPriceBufferFromPrefs();
+      await this.syncPmFokDepthBufferFromPrefs();
       await this.syncPfArbPriceBufferFromPrefs();
       const result = await saveClientDataDetailed(
         "Extensions",
