@@ -172,10 +172,12 @@ export async function placeBet(
     else {
       result = await provider.betting(account, option);
       // [changmen 扩展] 套利 A8 馆（RAY）POST 无 orderId：立刻并行对单刷侧栏，不挡后续拒单等待
+      // 已有 orderId 时 settle 会精确 waitForOrderId，勿再走金额/赔率模糊匹配（易误绑上笔）
       if (
         result.success
         && !result.pending
         && opts?.linkId
+        && !String(result.orderId ?? "").trim()
         && !isPendingConfirmVenueProvider(account.provider)
       ) {
         const linkId = opts.linkId;
@@ -184,6 +186,7 @@ export async function placeBet(
             account,
             option,
             linkId,
+            placedAt: Number(result.beginTime) || beginTime || Date.now(),
             rejectWaitSec: legRejectWaitSec(useUserStore().config, account.provider),
           }))
           .catch(() => {});

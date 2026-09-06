@@ -14,7 +14,11 @@ export const ARB_EARLY_APPEAR_PLACE_SLACK_MS = 4_000;
 const ARB_EARLY_APPEAR_MAX_MS = 12_000;
 const ODDS_EPS = 0.02;
 const STAKE_EPS = 0.51;
-const CREATE_AT_SLACK_MS = 15_000;
+/**
+ * 场馆 create_at 相对本地下单时刻的时钟容差（只允许略早于 placedAt）。
+ * 过大（如 15s）会把同金额/赔率的上一笔未入库单误绑进本轮 Link。
+ */
+export const CREATE_AT_SLACK_MS = 2_000;
 
 const inflight = new Map<string, Promise<boolean>>();
 
@@ -34,6 +38,11 @@ export function appearArbOrderInflightKey(
   return `${accountId}:${linkId}:${itemId}`;
 }
 
+/** 仅受理中的单可提前露侧栏；拒单/已结算勿绑，否则会污染本轮套利 Link。 */
+export function isAppearArbCandidateStatus(status: unknown): boolean {
+  return String(status ?? "").trim() === "none";
+}
+
 /** 用本腿金额/赔率/下单时间对上最新场馆单，避免误标 orders[0] */
 export function findMatchingArbVenueOrder(
   orders: VenueOrder[],
@@ -42,17 +51,23 @@ export function findMatchingArbVenueOrder(
 ): VenueOrder | undefined {
   const stake = Number(option.betMoney) || 0;
   const odds = Number(option.odds) || 0;
+  const placed = Number(placedAt) || 0;
   const newestFirst = sortVenueOrdersNewestFirst(orders);
   return newestFirst.find((order) => {
     const orderId = String(order.orderId ?? "").trim();
     if (!orderId)
+      return false;
+    if (!isAppearArbCandidateStatus(order.status))
       return false;
     if (Math.abs((Number(order.betMoney) || 0) - stake) > STAKE_EPS)
       return false;
     if (odds > 0 && Math.abs((Number(order.odds) || 0) - odds) > ODDS_EPS)
       return false;
     const created = Number(order.createAt) || 0;
-    if (created > 0 && created < placedAt - CREATE_AT_SLACK_MS)
+    // 缺时间戳：无法证明属于本轮 POST，跳过（宁可不早露，勿误绑）
+    if (!(created > 0) || !(placed > 0))
+      return false;
+    if (created < placed - CREATE_AT_SLACK_MS)
       return false;
     return true;
   });

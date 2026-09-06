@@ -45,7 +45,8 @@ export async function settleArbLeg(
     : rejectWaitSecOrOpts;
   const pendingBindOrderId = String(result?.orderId ?? "").trim() || undefined;
   // [changmen 扩展] RAY 等 A8 馆 POST 无 orderId：拒单等待期间并行对单，先露侧栏。
-  if (opts.pendingBindLinkId && opts.betOption) {
+  // 已有 orderId 时只走下方 waitForOrderId，避免金额/赔率模糊匹配误绑上笔未入库单。
+  if (opts.pendingBindLinkId && opts.betOption && !pendingBindOrderId) {
     const option = opts.betOption;
     const linkId = opts.pendingBindLinkId;
     void import("@/stores/betting/autoBet/appearArbOrderDuringRejectWait")
@@ -53,6 +54,7 @@ export async function settleArbLeg(
         account,
         option,
         linkId,
+        placedAt: Number(result?.beginTime) || Date.now(),
         rejectWaitSec: opts.rejectWaitSec,
       }))
       .catch(() => {});
